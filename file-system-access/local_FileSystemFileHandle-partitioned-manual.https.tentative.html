@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset=utf-8>
+<meta name="timeout" content="long">
+<script src="/common/dispatcher/dispatcher.js"></script>
+<script src="/common/get-host-info.sub.js"></script>
+<script src="/common/utils.js"></script>
+<script src="/html/cross-origin-embedder-policy/credentialless/resources/common.js"></script>
+<script src="/html/anonymous-iframe/resources/common.js"></script>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<script src="resources/test-helpers.js"></script>
+<script src="resources/local-fs-test-helpers.js"></script>
+<body>
+<script>
+
+const setUpChildFrame = (done) => `
+  const importScript = ${importScript};
+  await importScript("/resources/testharness.js");
+  await importScript("/resources/testdriver.js");
+  await importScript("/resources/testdriver-vendor.js");
+  await importScript("/file-system-access/resources/local-fs-test-helpers.js");
+  await importScript("/file-system-access/resources/test-helpers.js");
+  await window.test_driver.bless(
+      'show a file picker.<br />Please select an empty directory');
+  send("${done}", "done");
+`;
+
+const createTestFile = (name, contents) => (done) => `
+  self.showDirectoryPicker().then(async (dir) => {
+    const handle = await dir.getFileHandle("${name}", {create: true});
+    const writer = await handle.createWritable();
+    await writer.write(new Blob(["${contents}"]));
+    await writer.close();
+    send("${done}", "done");
+  });
+`;
+
+const removeTestFile = (name) => (done) => `
+  self.showDirectoryPicker().then(async (dir) => {
+    await dir.removeEntry("${name}");
+    send("${done}", "done");
+  });
+`;
+
+const assertNumEntries = (numFiles) => (done) => `
+  self.showDirectoryPicker().then(async (dir) => {
+    assert_equals(${numFiles}, await getDirectoryEntryCount(dir));
+    send("${done}", "done");
+  });
+`;
+
+const assertFileContents = (file, contents) => (done) => `
+  self.showDirectoryPicker().then(async (dir) => {
+    const handle = await dir.getFileHandle("${file}");
+    assert_equals("${contents}", await getFileContents(handle));
+    send("${done}", "done");
+  });
+`;
+
+const assertNoAccess = (done) => `
+  try {
+    await self.showDirectoryPicker();
+    send("${done}", "unexpected");
+  } catch (e) {
+    send("${done}", "done");
+  }
+`;
+
+framed_test(async (t, sendTo) => {
+  await sendTo(childContexts, setUpChildFrame);
+  await sendTo(sameSiteContexts, assertNumEntries(0));
+
+  // Create file in first-party context
+  await sendTo([FRAME_CONTEXT.firstParty], createTestFile("test.txt", "abc"));
+  await sendTo(sameSiteContexts, assertNumEntries(1));
+  await sendTo(sameSiteContexts, assertFileContents("test.txt", "abc"));
+}, 'getFileHandle across first-party frames');
+
+framed_test(async (t, sendTo) => {
+  await sendTo(childContexts, setUpChildFrame);
+  await sendTo(sameSiteContexts, assertNumEntries(0));
+
+  await sendTo([FRAME_CONTEXT.thirdPartySameSite], createTestFile("file", "b"));
+  await sendTo([FRAME_CONTEXT.thirdPartySameSite], assertNumEntries(1));
+  await sendTo([FRAME_CONTEXT.anonymousFrameSameSite], removeTestFile("file"));
+  await sendTo([FRAME_CONTEXT.thirdPartySameSite], assertNumEntries(0));
+}, 'removeEntry created by another first-party frame');
+
+framed_test(async (t, sendTo) => {
+  await sendTo(childContexts, setUpChildFrame);
+  await sendTo(crossSiteContexts, assertNoAccess);
+}, 'No access from cross-origin sub frames');
+
+// TODO(crbug.com/1322897): Add tests for incognito mode.
+// TODO(crbug.com/1322897): Add tests for ancestor bit frames.
+// TODO(crbug.com/1322897): Add tests for non-default buckets.
+
+</script>
+</body>

@@ -1,0 +1,90 @@
+<!doctype html>
+<head>
+  <meta charset=utf-8>
+  <script src="/common/dispatcher/dispatcher.js"></script>
+  <script src="/common/get-host-info.sub.js"></script>
+  <script src="/common/utils.js"></script>
+  <script src="/html/cross-origin-embedder-policy/credentialless/resources/common.js"></script>
+  <script src="/html/anonymous-iframe/resources/common.js"></script>
+  <script src="/resources/testharness.js"></script>
+  <script src="/resources/testharnessreport.js"></script>
+  <script src="/resources/testdriver.js"></script>
+  <script src="/resources/testdriver-vendor.js"></script>
+  <script src="resources/test-helpers.js"></script>
+  <script src="resources/local-fs-test-helpers.js"></script>
+</head>
+<body>
+<script>
+
+const setUpChildFrame = (done) => `
+  const importScript = ${importScript};
+  await importScript("/resources/testharness.js");
+  await importScript("/resources/testdriver.js");
+  await importScript("/resources/testdriver-vendor.js");
+  await importScript("/file-system-access/resources/local-fs-test-helpers.js");
+  await importScript("/file-system-access/resources/test-helpers.js");
+  await window.test_driver.bless(
+      'show a file picker.<br />Please select an empty directory');
+  send("${done}", "done");
+`;
+
+const createTestDir = (name) => (done) => `
+  self.showDirectoryPicker().then(async (dir) => {
+    await dir.getDirectoryHandle("${name}", {create: true});
+    send("${done}", "done");
+  });
+`;
+
+const removeTestDir = (name) => (done) => `
+  self.showDirectoryPicker().then(async (dir) => {
+    await dir.removeEntry("${name}", {recursive: true});
+    send("${done}", "done");
+  });
+`;
+
+const assertNumEntries = (numFiles) => (done) => `
+  self.showDirectoryPicker().then(async (dir) => {
+    assert_equals(${numFiles}, await getDirectoryEntryCount(dir));
+    send("${done}", "done");
+  });
+`;
+
+const assertNoAccess = (done) => `
+  try {
+    await self.showDirectoryPicker();
+    send("${done}", "unexpected");
+  } catch (e) {
+    send("${done}", "done");
+  }
+`;
+
+framed_test(async (t, sendTo) => {
+  await sendTo(childContexts, setUpChildFrame);
+  await sendTo(sameSiteContexts, assertNumEntries(0));
+
+  // Create directory in third-party samesite frame
+  await sendTo([FRAME_CONTEXT.anonymousFrameSameSite], createTestDir("test"));
+  await sendTo(sameSiteContexts, assertNumEntries(1));
+}, 'getDirectoryHandle across first-party frames');
+
+framed_test(async (t, sendTo) => {
+  await sendTo(childContexts, setUpChildFrame);
+  await sendTo(sameSiteContexts, assertNumEntries(0));
+
+  await sendTo([FRAME_CONTEXT.thirdPartySameSite], createTestDir("file"));
+  await sendTo([FRAME_CONTEXT.thirdPartySameSite], assertNumEntries(1));
+  await sendTo([FRAME_CONTEXT.anonymousFrameSameSite], removeTestDir("file"));
+  await sendTo([FRAME_CONTEXT.thirdPartySameSite], assertNumEntries(0));
+}, 'removeEntry created by another first-party frame');
+
+framed_test(async (t, sendTo) => {
+  await sendTo(childContexts, setUpChildFrame);
+  await sendTo(crossSiteContexts, assertNoAccess);
+}, 'No access from cross-origin sub frames');
+
+// TODO(crbug.com/1322897): Add tests for incognito mode.
+// TODO(crbug.com/1322897): Add tests for ancestor bit frames.
+// TODO(crbug.com/1322897): Add tests for non-default buckets.
+
+</script>
+</body>
