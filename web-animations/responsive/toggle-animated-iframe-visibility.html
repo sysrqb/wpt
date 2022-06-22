@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html class="reftest-wait">
+<meta name="assert" content="This should resume the animation after unhiding the iframe.">
+<title>CSS Test (Animations): Unhiding iframe visibility should restart animation. </title>
+<link rel="help" href="https://bugs.chromium.org/p/chromium/issues/detail?id=616270">
+<link rel="match" href="toggle-animated-iframe-visibility-ref.html">
+<script src="/common/reftest-wait.js"></script>
+
+<div id="container"></div>
+
+<div id="log"></div>
+
+<script>
+  var container;
+  var block;
+  var logDiv;
+
+  function verifyVisibility(expected_visibility) {
+    if (getComputedStyle(block).visibility !== expected_visibility) {
+      logDiv.innerHTML = "<p>FAIL</p>";
+    }
+  }
+
+  async function runTest() {
+    var animation = block.animate([
+      {
+        transform: 'rotate(0deg)'
+      },
+      {
+        transform: 'rotate(180deg)'
+      }
+    ],
+    {
+      duration: 10000000,
+      iterations: Infinity,
+      delay: -5000000,
+      easing: 'cubic-bezier(0, 1, 1, 0)'
+    });
+
+    await animation.ready;
+
+    container.style.visibility = 'hidden';
+    requestAnimationFrame(() => {
+      verifyVisibility('hidden');
+      container.style.visibility = 'visible';
+
+      requestAnimationFrame(() => {
+        verifyVisibility('visible');
+        takeScreenshot();
+      });
+    });
+  }
+
+  window.onload = function () {
+    logDiv = document.getElementById('log');
+    container = document.getElementById('container');
+    block = document.createElement('iframe');
+
+    container.appendChild(block);
+    block.onload = runTest;
+    block.src = 'resources/block.html';
+  };
+</script>
