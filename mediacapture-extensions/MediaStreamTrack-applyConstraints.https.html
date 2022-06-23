@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<script src="/mediacapture-image/resources/imagecapture-helpers.js"></script>
+<script>
+
+// This test verifies that we can all MediaStreamTrack.applyConstraints(), with
+// a mock Mojo service implementation.
+
+image_capture_test(async (t, imageCaptureTest) => {
+  const constraints = {advanced : [{
+    backgroundBlur: true,
+  }]};
+
+  const stream = await navigator.mediaDevices.getUserMedia({video: true});
+  const [videoTrack] = stream.getVideoTracks();
+
+  try {
+    await videoTrack.applyConstraints(constraints);
+  } catch (error) {
+    assert_unreached('Error applying constraints: ' + error.message);
+  }
+
+  const constraintSet = constraints.advanced[0];
+  const appliedConstraints = videoTrack.getConstraints();
+  const appliedConstraintSet = appliedConstraints.advanced[0];
+
+  // Check that |appliedConstraints| and |constraints| are equal.
+  assert_equals(constraintSet.length, appliedConstraintSet.length);
+  Object.keys(appliedConstraintSet).forEach((key, value) => {
+    assert_not_equals(constraintSet[key], undefined, 'key ' + key);
+    assert_equals(constraintSet[key], appliedConstraintSet[key], key);
+  });
+
+  const mockSettings = imageCaptureTest.mockImageCapture().options();
+  assert_equals(constraintSet.backgroundBlur, mockSettings.backgroundBlur,
+                'backgroundBlur');
+}, 'exercises MediaStreamTrack.applyConstraints(constraints)');
+
+</script>

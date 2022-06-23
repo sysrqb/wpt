@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<script src="/mediacapture-image/resources/imagecapture-helpers.js"></script>
+<script>
+
+const supportedBooleanStates = [[], [false], [true], [false, true]];
+
+// This test verifies that MediaTrackCapabilities are returned upon
+// MediaStreamTrack.getCapabilities(), with a mock Mojo service implementation.
+
+image_capture_test(async (t, imageCaptureTest) => {
+  const mockCapabilities = imageCaptureTest.mockImageCapture().state();
+
+  // |stream| must be created _after_ |mock| is constructed to give the
+  // latter time to override the bindings.
+  const stream = await navigator.mediaDevices.getUserMedia({video: true});
+  assert_equals(stream.getAudioTracks().length, 0);
+  assert_equals(stream.getVideoTracks().length, 1);
+
+  const videoTrack = stream.getVideoTracks()[0];
+  assert_equals(typeof videoTrack.getCapabilities, 'function');
+
+  const capabilities = videoTrack.getCapabilities();
+  assert_equals(typeof capabilities, 'object');
+
+  assert_true('backgroundBlur' in capabilities, 'backgroundBlur');
+  assert_equals(capabilities.backgroundBlur.includes(false),
+                supportedBooleanStates[
+                    mockCapabilities.supportedBackgroundBlurStates
+                    ].includes(false),
+                'backgroundBlur');
+  assert_equals(capabilities.backgroundBlur.includes(true),
+                supportedBooleanStates[
+                    mockCapabilities.supportedBackgroundBlurStates
+                    ].includes(true),
+                'backgroundBlur');
+}, "exercises MediaStreamTrack.getCapabilities()");
+</script>

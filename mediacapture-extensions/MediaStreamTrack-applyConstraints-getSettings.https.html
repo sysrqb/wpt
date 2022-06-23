@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<script src="/mediacapture-image/resources/imagecapture-helpers.js"></script>
+<script>
+
+// This test verifies that the |constraints| configured in the mock Mojo
+// service implementation, are returned by MediaStreamTrack.getSettings().
+
+image_capture_test(async t => {
+  const constraints = {advanced : [{
+    backgroundBlur: true,
+  }]};
+
+  const stream = await navigator.mediaDevices.getUserMedia({video: true});
+  const [videoTrack] = stream.getVideoTracks();
+
+  try {
+    await videoTrack.applyConstraints(constraints);
+  } catch (error) {
+    assert_unreached('Error applying constraints: ' + error.message);
+  }
+
+  const constraintSet = constraints.advanced[0];
+  let settings = videoTrack.getSettings();
+  assert_equals(typeof settings, 'object');
+
+  assert_equals(constraintSet.backgroundBlur, settings.backgroundBlur,
+                'backgroundBlur');
+}, 'exercises an applyConstraints() - getSettings() cycle');
+</script>
